@@ -1,38 +1,20 @@
-from flask import Flask, request, render_template, flash, redirect, url_for
-import PyPDF2
-import os
+import streamlit as st
+from qa_engine import load_and_split_pdf, create_vector_store, get_answer
 
-app = Flask(__name__)
-app.secret_key = 'AIzaSyDlBNc98LOQFujLs_8TAc3MXaxQmDpy1dk'
+st.set_page_config(page_title="📄 Document Q&A - GenAI")
+st.title("📄 Upload PDF and Ask Questions")
 
-def extract_text_from_pdf(file_path):
-    text = ''
-    with open(file_path, 'rb') as file:
-        reader = PyPDF2.PdfReader(file)
-        for page in reader.pages:
-            text += page.extract_text()
-    return text
+uploaded_file = st.file_uploader("Upload a PDF", type="pdf")
 
-def generate_answer(document_text, question):
-    # Placeholder for language model integration
-    # For demonstration, we'll return a dummy answer
-    return f"Answer to '{question}' based on the document."
+if uploaded_file:
+    with st.spinner("Processing PDF..."):
+        chunks = load_and_split_pdf(uploaded_file)
+        index, all_chunks, _ = create_vector_store(chunks)
+        st.success("PDF processed successfully!")
 
-@app.route('/', methods=['GET', 'POST'])
-def index():
-    if request.method == 'POST':
-        if 'pdf_file' not in request.files:
-            flash('No file part')
-            return redirect(request.url)
-        file = request.files['pdf_file']
-        if file.filename == '':
-            flash('No selected file')
-            return redirect(request.url)
-        if file:
-            file_path = os.path.join('uploads', file.filename)
-            file.save(file_path)
-            document_text = extract_text_from_pdf(file_path)
-            question = request.form['question']
-            answer = generate_answer(document_text, question)
-            return render_template('result.html', question=question, answer=answer)
-    return render_template('index.html')
+    question = st.text_input("Ask a question from the document:")
+    
+    if question:
+        with st.spinner("Searching for answer..."):
+            answer = get_answer(question, index, all_chunks)
+            st.markdown(f"**Answer:** {answer}")
